@@ -1,1 +1,3 @@
-export class CreateUserDto {}
+import { User } from "../user.entity";
+
+export class CreateUserDto extends User {}

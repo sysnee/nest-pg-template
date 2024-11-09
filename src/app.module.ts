@@ -1,13 +1,12 @@
-import { Logger, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './resources/users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
-import * as express from 'express';
-import { auth } from 'express-openid-connect';
-import * as session from 'express-session';
+import { HttpModule } from '@nestjs/axios';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
@@ -32,40 +31,12 @@ import * as session from 'express-session';
         };
       },
     }),
+    HttpModule,
+    JwtModule,
     UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 
-export class AppModule implements NestModule {
-  constructor(private configService: ConfigService) {}
-  configure(consumer: MiddlewareConsumer) {
-    const app = express();
-
-    app.use(
-      session({
-        secret: this.configService.get<string>('SESSION_SECRET'),
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-        },
-      }),
-    )
-
-    app.use(
-      auth({
-        issuerBaseURL: this.configService.get<string>('AUTH0_DOMAIN'),
-        baseURL: this.configService.get<string>('BACKEND_BASE_URL'),
-        clientID: this.configService.get<string>('AUTH0_CLIENT_ID'),
-        secret: this.configService.get<string>('AUTH0_CLIENT_SECRET'),
-        authRequired: false,
-        idpLogout: true,
-      }),
-    );
-
-    consumer.apply(app).forRoutes('*');
-  }
-}
+export class AppModule {}

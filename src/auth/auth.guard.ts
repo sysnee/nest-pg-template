@@ -1,21 +1,60 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Request } from 'express';
+import { JwksClient } from 'jwks-rsa';
+import * as jwt from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
-import { Request, Response } from 'express';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private configService: ConfigService) { }
+  constructor(
+    private configService: ConfigService,
+  ) { }
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const response = context.switchToHttp().getResponse<Response>();
 
-    if (request.oidc && request.oidc.isAuthenticated()) {
-      return true;
-    } else {
-      response.redirect(`${this.configService.get('BACKEND_BASE_URL')}/login`)
-      // response.redirect(`${this.configService.get('AUTH0_DOMAIN')}/authorize?response_type=token&client_id=${this.configService.get('AUTH0_CLIENT_ID')}&redirect_uri=http://localhost:4000/v1/auth-callback`);
-      return false;
+    const client = new JwksClient({
+      jwksUri: `${this.configService.get('AUTH0_DOMAIN')}/.well-known/jwks.json`,
+    });
+    
+    function getKey(header, callback) {
+      client.getSigningKey(header.kid, (err, key) => {
+        console.log('getting key')
+        if (err) {
+          console.log('caiu no erro?')
+          callback(err, null);
+        } else {
+          const signingKey = key.getPublicKey();
+          console.log('signingKey', signingKey)
+          callback(null, signingKey);
+        }
+      });
     }
+
+    const validateAccessToken = (token) => {
+      return new Promise((resolve, reject) => {
+        jwt.verify(
+          token,
+          getKey,
+          {
+            algorithms: ["RS256"],
+          },
+          (err, decoded) => {
+            if (err) {
+              console.log(err)
+              reject(false);
+            } else {
+              resolve(decoded);
+            }
+          }
+        );
+      });
+    };
+
+    const token = request.headers['authorization'].split(' ')[1].trim()
+
+    const result = await validateAccessToken(token)
+
+    return !!result;
   }
 }
